@@ -1,6 +1,6 @@
 APPS  = ./apps
 SRC   = ./src
-FLAGS = -lpthread
+FLAGS = -lpthread -Wall
 
 SERVER_APP = ServerApplication
 

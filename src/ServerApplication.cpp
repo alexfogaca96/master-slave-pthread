@@ -35,6 +35,7 @@ void* slave(void* ignored)
         pthread_mutex_unlock(&mutex_number);
     }
     perror("Unexpected behaviour.");
+    return NULL;
 }
 
 
@@ -49,10 +50,11 @@ void* master(void* ignored)
         pthread_cond_signal(&condition_request);
     }
     perror("Unexpected behaviour.");
+    return NULL;
 }
 
 /* Cria a thread master */
-void* intialize_master()
+void intialize_master()
 {
     pthread_t master_thread;
     if(pthread_create(&master_thread, NULL, master, (void*) NULL) != 0)
@@ -62,16 +64,16 @@ void* intialize_master()
 }
 
 /* Cria todas as threads slave */
-void* initialize_slave_threads(pthread_t* slaves)
+void initialize_slave_threads(pthread_t* slaves)
 {
-    int i;
+    uint i;
     for(i = 0; i < NUM_THREADS; i++)
         if(pthread_create(&slaves[i], NULL, slave, (void*) NULL) != 0)
             perror("Couldn't create pthread.");
 }
 
 /* Inicializa todos parâmetros pela leitura no terminal */
-void* set_parameters()
+void set_parameters()
 {
     printf("You need to set some parameters before the execution.\n");
     
@@ -88,7 +90,7 @@ void* set_parameters()
  * - inicializa mutex de request e de number;
  * - cria as threads slave e a thread listener.
  */
-main()
+int main()
 {
     set_parameters();
     
