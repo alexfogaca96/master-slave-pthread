@@ -1,13 +1,17 @@
-APPS  = ./apps
-SRC   = ./src
-FLAGS = -lpthread -Wall
+APPS    = ./apps
+SRC     = ./src
+PTHREAD = -lpthread
+FLAGS   = -Wall
 
 SERVER_APP = ServerApplication
+CLIENT_APP = ClientApplication
 
 all:
-	g++ $(SRC)/$(SERVER_APP).cpp -o $(APPS)/$(SERVER_APP) $(FLAGS)
+	gcc $(SRC)/$(SERVER_APP).c -o $(APPS)/$(SERVER_APP) $(PTHREAD) $(FLAGS)
+	gcc $(SRC)/$(CLIENT_APP).c -o $(APPS)/$(CLIENT_APP) $(FLAGS)
 
-run:
+server:
 	$(APPS)/$(SERVER_APP)
 
-
+client:
+	$(APPS)/$(CLIENT_APP)
