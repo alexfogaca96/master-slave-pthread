@@ -6,6 +6,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/queue.h>
+#include <limits.h>
 
 #define BUFFER_SIZE 256
 #define IPV4 AF_INET
@@ -15,7 +17,6 @@
 
 /* Parâmetros de conexão */
 int PORT;
-int NUM_CONNECTIONS;
 
 /* Número de threads slaves */
 unsigned int NUM_THREADS;
@@ -38,6 +39,23 @@ int open_socket;
 unsigned int number_of_requests = 0;
 pthread_mutex_t mutex_connection_info;
 
+/* Fila de requests */
+TAILQ_HEAD(tailhead, entry) head;
+
+struct entry {
+    int open_socket;
+    TAILQ_ENTRY(entry) entries;
+};
+
+void add_request_to_queue(int connection)
+{
+    struct entry *element = malloc(sizeof(struct entry));
+    if(element) {
+        element->open_socket = connection;
+    }
+    TAILQ_INSERT_TAIL(&head, element, entries);
+}
+
 char* build_message(unsigned int number_of_messages)
 {
     char number_of_messages_string[32];
@@ -57,22 +75,38 @@ char* build_message(unsigned int number_of_messages)
 /*
  *
  */
+int get_request_from_queue()
+{
+    pthread_mutex_lock(&mutex_connection_info);
+    ++number_of_requests;
+    struct entry* next_request = TAILQ_FIRST(&head);
+    TAILQ_REMOVE(&head, next_request, entries);
+    if(TAILQ_EMPTY(&head)) {
+        pthread_mutex_lock(&mutex_request);
+        request_available = 0;
+        pthread_mutex_unlock(&mutex_request);
+    }
+    printf("(pthread %lx) request %d from connection %d.\n",
+        pthread_self(),
+        number_of_requests,
+        next_request->open_socket);
+    pthread_mutex_unlock(&mutex_connection_info);
+    return next_request->open_socket;
+}
+
+/*
+ *
+ */
 void* slave(void* ignored)
 {   
     while(1) {
         pthread_mutex_lock(&mutex_request);
         while(request_available == 0) {
             pthread_cond_wait(&condition_request, &mutex_request);
-        }
-        request_available = 0;
+        }        
         pthread_mutex_unlock(&mutex_request);
 
-        pthread_mutex_lock(&mutex_connection_info);
-        ++number_of_requests;
-        int current_connection = open_socket;
-        printf("(pthread %lx) request %d from connection %d.\n", pthread_self(), number_of_requests, current_connection);
-        pthread_mutex_unlock(&mutex_connection_info);
-
+        int current_connection = get_request_from_queue();
         unsigned int number_of_messages = 1;
         char buffer[BUFFER_SIZE];
         while(1) {
@@ -125,8 +159,9 @@ void* master(void* ignored)
         perror("Couldn't bind socket configuration on address.");
         exit(0);
     }
-    listen(socket_file_descriptor, NUM_CONNECTIONS);
+    listen(socket_file_descriptor, INT_MAX);
 
+    TAILQ_INIT(&head);
     address_in client_address;
     socklen_t client_address_length = sizeof(client_address);
     while(1) {
@@ -140,7 +175,8 @@ void* master(void* ignored)
         }
 
         pthread_mutex_lock(&mutex_connection_info);
-        open_socket = new_connection;
+        add_request_to_queue(new_connection);
+        printf("Added new request to Queue.\n");
         request_available = 1;
         pthread_mutex_unlock(&mutex_connection_info);
 
@@ -174,16 +210,13 @@ void set_parameters()
 {
     printf("You need to set some parameters before the execution.\n");
     
-    printf("> number of slave threads: ");
-    scanf("%u", &NUM_THREADS);
-
     char raw_port[4];
     printf("> port number desired: ");
     scanf("%s", raw_port);
     PORT = atoi(raw_port);
 
-    printf("> number of maximum client connections: ");
-    scanf("%d", &NUM_CONNECTIONS);
+    printf("> number of slave threads: ");
+    scanf("%u", &NUM_THREADS);
 }
 
 /*
