@@ -19,17 +19,6 @@ const char exit_message[] = "exit\n";
 int PORT;
 char HOST[9] = "127.0.0.1";
 
-/* Inicializa todos parâmetros pela leitura no terminal */
-void set_parameters()
-{
-    printf("You need to set some parameters before the execution.\n");
-
-    char raw_port[4];
-    printf("> port number desired: ");
-    scanf("%s", raw_port);
-    PORT = atoi(raw_port);
-}
-
 /* Tira os '\n' do stdin, que sobraram do scanf */
 void clear_stdin()
 {
@@ -42,16 +31,54 @@ void clear_stdin()
 }
 
 /*
- *
+ * Troca mensagens com o servidor por meio do socket
+ * configurado com IPV4 e TCP.
+ */
+void chat_with_server(int socket_file_descriptor)
+{
+	char buffer[BUFFER_SIZE];
+	clear_stdin();
+	printf("To terminate the application, type exit.\n");
+	while(1) {
+		// recebe texto do terminal e manda para o servidor pelo socket
+		printf("Enter the message, please (limit %d characters): ", BUFFER_SIZE);
+		fgets(buffer, BUFFER_SIZE, stdin);
+		if(write(socket_file_descriptor, buffer, strlen(buffer) - 1) < 0) {
+			fprintf(stderr, "Couldn't write to socket.\n");
+			exit(0);
+		}
+
+		// se o texto digitado for 'exit', termina aplicação
+		if(strcmp(exit_message, buffer) == 0) {
+			printf("Bye!\n");
+			exit(0);
+		}
+
+		// lê resposta do servidor
+		memset(buffer, 0, BUFFER_SIZE - 1);
+		if(read(socket_file_descriptor, buffer, BUFFER_SIZE - 1) < 0) {
+			fprintf(stderr, "Couldn't read from socket.\n");
+			exit(0);
+		}
+		printf("%s\n", buffer);
+	}
+	close(socket_file_descriptor);
+}
+
+/*
+ * Configura socket para se conectar com o servidor, tenta a conexão
+ * e retorna o número da conexão para poder ser acessada.
  */
 int create_server_connection()
 {
+	// configura socket IPV4 e TCP
 	int socket_file_descriptor = socket(IPV4, TCP, 0);
 	if(socket_file_descriptor < 0) {
 		fprintf(stderr, "Couldn't open socket.\n");
 		exit(0);
 	}
 
+	// procura o host pelo nome (127.0.0.1 ou localhost)
 	struct hostent* server = gethostbyname(HOST);
 	if(server == NULL) {
 		fprintf(stderr, "No such host is available.\n");
@@ -66,6 +93,7 @@ int create_server_connection()
 		server->h_length);
 	server_address.sin_port = htons(PORT);
 
+	// tenta conectar ao servidor
 	int connection = connect(
 		socket_file_descriptor,
 		(struct sockaddr*) &server_address,
@@ -78,37 +106,22 @@ int create_server_connection()
 	return socket_file_descriptor;
 }
 
-/*
- *
- */
-void chat_with_server(int socket_file_descriptor)
+/* Inicializa todos parâmetros pela leitura no terminal */
+void set_parameters()
 {
-	char buffer[BUFFER_SIZE];
-	clear_stdin();
-	printf("To terminate the application, type exit.\n");
-	while(1) {
-		printf("Enter the message, please (limit %d characters): ", BUFFER_SIZE);
-		fgets(buffer, BUFFER_SIZE, stdin);
-		if(write(socket_file_descriptor, buffer, strlen(buffer) - 1) < 0) {
-			fprintf(stderr, "Couldn't write to socket.\n");
-			exit(0);
-		}
-		if(strcmp(exit_message, buffer) == 0) {
-			printf("Bye!\n");
-			exit(0);
-		}
-		memset(buffer, 0, BUFFER_SIZE - 1);
-		if(read(socket_file_descriptor, buffer, BUFFER_SIZE - 1) < 0) {
-			fprintf(stderr, "Couldn't read from socket.\n");
-			exit(0);
-		}
-		printf("%s\n", buffer);
-	}
-	close(socket_file_descriptor);
+    printf("You need to set some parameters before the execution.\n");
+
+    char raw_port[4];
+    printf("> port number desired: ");
+    scanf("%s", raw_port);
+    PORT = atoi(raw_port);
 }
 
 /*
- *
+ * Ponto de execução do cliente:
+ * - recebe parâmetros iniciais;
+ * - cria conexão socket com servidor;
+ * - troca mensagens com o servidor.
  */
 int main()
 {
